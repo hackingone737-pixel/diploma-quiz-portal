@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import os
 import random
 import re
@@ -1349,7 +1350,14 @@ def submit_quiz():
         })
 
     score = sum(1 for item in review_data if item["is_correct"])
-    started = datetime.fromisoformat(session["exam_started_at"])
+    started_raw = session.get("exam_started_at")
+    if started_raw:
+        try:
+            started = datetime.fromisoformat(started_raw)
+        except Exception:
+            started = datetime.now(timezone.utc)
+    else:
+        started = datetime.now(timezone.utc)
     elapsed = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
     elapsed = min(elapsed, exam["duration_minutes"] * 60)
 

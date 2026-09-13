@@ -91,19 +91,33 @@ assert r.status_code == 302, r.status_code
 r = client.get('/api/exam_status/1')
 assert r.get_json()['allow_review'] is False
 
-# Test Student Submission & Answers JSON
+# Test Student Submission & Answers JSON via direct POST /submit_quiz
+client.get('/logout')
+r = client.post('/login', data={'role': 'student', 'student_pin': 'STU100', 'student_name': 'Submission Tester', 'exam_id': 1, 'csrf_token': token})
+assert r.status_code == 302, r.status_code
+with client.session_transaction() as sess:
+    sess['exam_started_at'] = '2026-09-13T12:00:00+00:00'
+
+r = client.post('/submit_quiz', data={'csrf_token': token, 'question_1': 'A'})
+assert r.status_code == 200, r.status_code
+assert b'Assessment Score' in r.data or b'Your Final Score' in r.data or b'Submission' in r.data or b'Topper' in r.data
+
 conn = app.db_conn()
-conn.execute("INSERT INTO submissions(exam_id,student_pin,student_name,score,total_questions,time_taken_seconds,submitted_at,answers_json) VALUES(1,'STU999','Test Student',1,1,120,'2026-09-13T12:00:00Z','{\"1\":\"B\"}')")
-conn.commit()
-sub_id = conn.execute("SELECT id FROM submissions WHERE student_pin='STU999'").fetchone()[0]
+sub_id = conn.execute("SELECT id FROM submissions WHERE student_pin='STU100'").fetchone()[0]
 conn.close()
 
-# Test Teacher Submission Review Endpoint (teacher session still active)
+# Re-authenticate teacher session for teacher endpoints
+r = client.post('/login', data={
+    'role':'teacher','teacher_user':'admin','teacher_pass':'QuizPortal#2026!SecureKey99','csrf_token':token
+}, follow_redirects=False)
+assert r.status_code == 302, r.status_code
+
+# Test Teacher Submission Review Endpoint (teacher session active)
 r = client.get(f'/teacher/submissions/{sub_id}/review')
 assert r.status_code == 200, r.status_code
 rev_json = r.get_json()
 assert rev_json['status'] == 'success'
-assert rev_json['student_pin'] == 'STU999'
+assert rev_json['student_pin'] == 'STU100'
 
 # Test Clear Submissions Endpoint
 r = client.post('/teacher/exams/1/clear_submissions', data={'csrf_token': token})
