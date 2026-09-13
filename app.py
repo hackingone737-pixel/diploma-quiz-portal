@@ -293,8 +293,11 @@ def now_iso():
 
 def db_conn():
     if DATABASE_URL and psycopg2 is not None:
-        raw_conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-        return DBWrapper(True, raw_conn)
+        try:
+            raw_conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+            return DBWrapper(True, raw_conn)
+        except Exception as e:
+            print(f"[WARNING] PostgreSQL connection failed: {e}. Falling back to SQLite.")
 
     os.makedirs(os.path.dirname(DATABASE) or ".", exist_ok=True)
     raw_conn = sqlite3.connect(DATABASE, timeout=20)
