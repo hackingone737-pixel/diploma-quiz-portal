@@ -293,16 +293,18 @@ def now_iso():
 
 def db_conn():
     if DATABASE_URL and psycopg2 is not None:
-        target_url = DATABASE_URL
-        if "@dpg-" in target_url and ".render.com" not in target_url:
-            # Auto-convert internal Render host to external Oregon domain
-            target_url = target_url.replace("/", ".oregon-postgres.render.com/", 1)
+        urls_to_try = [DATABASE_URL]
+        if "@dpg-" in DATABASE_URL and ".render.com" not in DATABASE_URL:
+            for reg in ["singapore", "oregon", "frankfurt", "ohio"]:
+                urls_to_try.append(DATABASE_URL.replace("/", f".{reg}-postgres.render.com/", 1))
 
-        try:
-            raw_conn = psycopg2.connect(target_url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=5)
-            return DBWrapper(True, raw_conn)
-        except Exception as e:
-            print(f"[WARNING] PostgreSQL connection failed ({e}). Falling back to SQLite.")
+        for target_url in urls_to_try:
+            try:
+                raw_conn = psycopg2.connect(target_url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=4)
+                return DBWrapper(True, raw_conn)
+            except Exception:
+                continue
+        print("[WARNING] PostgreSQL connection failed. Falling back to SQLite.")
 
     os.makedirs(os.path.dirname(DATABASE) or ".", exist_ok=True)
     raw_conn = sqlite3.connect(DATABASE, timeout=20)
