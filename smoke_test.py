@@ -50,6 +50,22 @@ r = client.post('/api/export_mcq_docx', json={'title': 'Test Exam', 'questions':
 assert r.status_code == 200, r.status_code
 assert r.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
+# Test Assessment Creation and Deletion Endpoint
+r = client.post('/teacher/exams/new', data={'title': 'Temp Delete Test Exam', 'description': 'To be deleted', 'duration_minutes': '30', 'csrf_token': token})
+assert r.status_code == 302, r.status_code
+conn = app.db_conn()
+temp_exam = conn.execute("SELECT id FROM exams WHERE title='Temp Delete Test Exam'").fetchone()
+assert temp_exam is not None
+temp_id = temp_exam[0]
+conn.close()
+
+r = client.post(f'/teacher/exams/{temp_id}/delete', data={'csrf_token': token})
+assert r.status_code == 302, r.status_code
+conn = app.db_conn()
+deleted_exam = conn.execute("SELECT id FROM exams WHERE id=?", (temp_id,)).fetchone()
+assert deleted_exam is None
+conn.close()
+
 # Test Import to Exam
 r = client.post('/api/import_converted_mcqs', json={'exam_id': 1, 'subject': 'Test Subject', 'questions': res_json['questions']})
 assert r.status_code == 200, r.status_code

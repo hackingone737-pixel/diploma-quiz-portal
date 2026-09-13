@@ -512,6 +512,22 @@ def toggle_exam(exam_id):
     return redirect(url_for("teacher_dashboard", exam_id=exam_id))
 
 
+@app.post("/teacher/exams/<int:exam_id>/delete")
+@teacher_required
+def delete_exam(exam_id):
+    if not check_csrf(): abort(400, "Invalid form token")
+    conn = db_conn()
+    exam = conn.execute("SELECT title FROM exams WHERE id=?", (exam_id,)).fetchone()
+    if not exam:
+        conn.close()
+        abort(404)
+    conn.execute("DELETE FROM exams WHERE id=?", (exam_id,))
+    conn.commit()
+    conn.close()
+    flash(f"🗑️ Assessment '{exam['title']}' permanently deleted.", "success")
+    return redirect(url_for("teacher_dashboard"))
+
+
 @app.post("/teacher/exams/<int:exam_id>/update_timer")
 @teacher_required
 def update_exam_timer(exam_id):
