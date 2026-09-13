@@ -91,7 +91,17 @@ SEED_QUESTIONS = [
     ("Computer Networks (306)", "Which routing method sends packets through all possible paths?", "Flooding", "Static routing", "Subnetting", "ARP", "A"),
 ]
 
-SCHEMA = """
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
+
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or os.environ.get("RENDER_POSTGRES_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+SCHEMA_SQLITE = """
 CREATE TABLE IF NOT EXISTS exams (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL UNIQUE,
@@ -131,35 +141,193 @@ CREATE INDEX IF NOT EXISTS idx_submissions_exam ON submissions(exam_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_exam_rank ON submissions(exam_id, score DESC, time_taken_seconds ASC);
 """
 
+SCHEMA_POSTGRES = """
+CREATE TABLE IF NOT EXISTS exams (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  duration_minutes INTEGER NOT NULL DEFAULT 45,
+  active INTEGER NOT NULL DEFAULT 1,
+  started INTEGER NOT NULL DEFAULT 0,
+  allow_review INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS questions (
+  id SERIAL PRIMARY KEY,
+  exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL DEFAULT 'General',
+  question_text TEXT NOT NULL,
+  option_a TEXT NOT NULL,
+  option_b TEXT NOT NULL,
+  option_c TEXT NOT NULL,
+  option_d TEXT NOT NULL,
+  correct_option VARCHAR(10) NOT NULL CHECK(correct_option IN ('A','B','C','D')),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS submissions (
+  id SERIAL PRIMARY KEY,
+  exam_id INTEGER NOT NULL REFERENCES exams(id) ON DELETE CASCADE,
+  student_pin VARCHAR(100) NOT NULL,
+  student_name VARCHAR(150) NOT NULL,
+  score INTEGER NOT NULL,
+  total_questions INTEGER NOT NULL,
+  time_taken_seconds INTEGER NOT NULL,
+  submitted_at TEXT NOT NULL,
+  answers_json TEXT NOT NULL DEFAULT '{}',
+  UNIQUE(exam_id, student_pin)
+);
+CREATE INDEX IF NOT EXISTS idx_questions_exam ON questions(exam_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_exam ON submissions(exam_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_exam_rank ON submissions(exam_id, score DESC, time_taken_seconds ASC);
+"""
+
+
+class RowWrapper:
+    def __init__(self, data, description=None):
+        if isinstance(data, sqlite3.Row):
+            self._dict = dict(data)
+            self._tuple = tuple(data)
+        elif isinstance(data, dict):
+            self._dict = dict(data)
+            self._tuple = tuple(data.values())
+        elif isinstance(data, (tuple, list)):
+            self._tuple = tuple(data)
+            if description:
+                self._dict = {desc[0]: val for desc, val in zip(description, data)}
+            else:
+                self._dict = {str(i): val for i, val in enumerate(data)}
+        else:
+            self._dict = {}
+            self._tuple = ()
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._tuple[key]
+        return self._dict[key]
+
+    def keys(self):
+        return list(self._dict.keys())
+
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
+
+class CursorWrapper:
+    def __init__(self, is_pg, cur, last_inserted_id=None):
+        self.is_pg = is_pg
+        self.cur = cur
+        self._last_inserted_id = last_inserted_id
+
+    @property
+    def lastrowid(self):
+        if self._last_inserted_id is not None:
+            return self._last_inserted_id
+        return getattr(self.cur, "lastrowid", None)
+
+    def fetchone(self):
+        res = self.cur.fetchone()
+        if res is None:
+            return None
+        return RowWrapper(res, getattr(self.cur, "description", None))
+
+    def fetchall(self):
+        rows = self.cur.fetchall() or []
+        desc = getattr(self.cur, "description", None)
+        return [RowWrapper(r, desc) for r in rows]
+
+
+class DBWrapper:
+    def __init__(self, is_pg, conn):
+        self.is_pg = is_pg
+        self.conn = conn
+
+    def _convert_sql(self, sql):
+        if self.is_pg:
+            # Replace sqlite '?' with postgres '%s'
+            return sql.replace("?", "%s")
+        return sql
+
+    def execute(self, sql, params=()):
+        sql_conv = self._convert_sql(sql)
+        cur = self.conn.cursor()
+        
+        # Check for postgres RETURNING id for lastrowid compatibility
+        last_id = None
+        if self.is_pg and sql_conv.strip().upper().startswith("INSERT INTO EXAMS") and "RETURNING" not in sql_conv.upper():
+            sql_conv += " RETURNING id"
+            cur.execute(sql_conv, params)
+            r = cur.fetchone()
+            last_id = r[0] if r else None
+            return CursorWrapper(self.is_pg, cur, last_inserted_id=last_id)
+            
+        cur.execute(sql_conv, params)
+        return CursorWrapper(self.is_pg, cur)
+
+    def executemany(self, sql, seq_of_params):
+        sql_conv = self._convert_sql(sql)
+        cur = self.conn.cursor()
+        cur.executemany(sql_conv, seq_of_params)
+        return CursorWrapper(self.is_pg, cur)
+
+    def executescript(self, script_sql):
+        cur = self.conn.cursor()
+        if self.is_pg:
+            for stmt in script_sql.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    cur.execute(stmt)
+        else:
+            cur.executescript(script_sql)
+        return CursorWrapper(self.is_pg, cur)
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
 def db_conn():
+    if DATABASE_URL and psycopg2 is not None:
+        raw_conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        return DBWrapper(True, raw_conn)
+
     os.makedirs(os.path.dirname(DATABASE) or ".", exist_ok=True)
-    conn = sqlite3.connect(DATABASE, timeout=20)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA synchronous = NORMAL")
-    conn.execute("PRAGMA busy_timeout = 10000")
-    return conn
+    raw_conn = sqlite3.connect(DATABASE, timeout=20)
+    raw_conn.row_factory = sqlite3.Row
+    raw_conn.execute("PRAGMA foreign_keys = ON")
+    raw_conn.execute("PRAGMA journal_mode = WAL")
+    raw_conn.execute("PRAGMA synchronous = NORMAL")
+    raw_conn.execute("PRAGMA busy_timeout = 10000")
+    return DBWrapper(False, raw_conn)
 
 
 def init_db():
     conn = db_conn()
-    conn.executescript(SCHEMA)
-    # Check if started and allow_review columns exist in existing DBs
-    cols = [r["name"] for r in conn.execute("PRAGMA table_info(exams)").fetchall()]
-    if "started" not in cols:
-        conn.execute("ALTER TABLE exams ADD COLUMN started INTEGER NOT NULL DEFAULT 0")
-    if "allow_review" not in cols:
-        conn.execute("ALTER TABLE exams ADD COLUMN allow_review INTEGER NOT NULL DEFAULT 0")
-
-    sub_cols = [r["name"] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()]
-    if "answers_json" not in sub_cols:
-        conn.execute("ALTER TABLE submissions ADD COLUMN answers_json TEXT NOT NULL DEFAULT '{}'")
+    if conn.is_pg:
+        conn.executescript(SCHEMA_POSTGRES)
+        cols = [r["column_name"] for r in conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='exams'").fetchall()]
+        if "started" not in cols:
+            conn.execute("ALTER TABLE exams ADD COLUMN started INTEGER NOT NULL DEFAULT 0")
+        if "allow_review" not in cols:
+            conn.execute("ALTER TABLE exams ADD COLUMN allow_review INTEGER NOT NULL DEFAULT 0")
+        sub_cols = [r["column_name"] for r in conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='submissions'").fetchall()]
+        if "answers_json" not in sub_cols:
+            conn.execute("ALTER TABLE submissions ADD COLUMN answers_json TEXT NOT NULL DEFAULT '{}'")
+    else:
+        conn.executescript(SCHEMA_SQLITE)
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(exams)").fetchall()]
+        if "started" not in cols:
+            conn.execute("ALTER TABLE exams ADD COLUMN started INTEGER NOT NULL DEFAULT 0")
+        if "allow_review" not in cols:
+            conn.execute("ALTER TABLE exams ADD COLUMN allow_review INTEGER NOT NULL DEFAULT 0")
+        sub_cols = [r["name"] for r in conn.execute("PRAGMA table_info(submissions)").fetchall()]
+        if "answers_json" not in sub_cols:
+            conn.execute("ALTER TABLE submissions ADD COLUMN answers_json TEXT NOT NULL DEFAULT '{}'")
 
     exam_count = conn.execute("SELECT COUNT(*) FROM exams").fetchone()[0]
     if exam_count == 0:
