@@ -257,7 +257,7 @@ class DBWrapper:
             sql_conv += " RETURNING id"
             cur.execute(sql_conv, params)
             r = cur.fetchone()
-            last_id = r[0] if r else None
+            last_id = r["id"] if r else None
             return CursorWrapper(self.is_pg, cur, last_inserted_id=last_id)
             
         cur.execute(sql_conv, params)
@@ -293,19 +293,16 @@ def now_iso():
 
 def db_conn():
     if DATABASE_URL and psycopg2 is not None:
-        urls_to_try = [DATABASE_URL]
-        if "@dpg-" in DATABASE_URL and ".render.com" not in DATABASE_URL:
-            # Generate external Render DB hostnames for common regions
-            for region in ["oregon", "singapore", "frankfurt", "ohio"]:
-                urls_to_try.append(DATABASE_URL.replace("@dpg-", f"@dpg-").replace("/", f".{region}-postgres.render.com/", 1))
+        target_url = DATABASE_URL
+        if "@dpg-" in target_url and ".render.com" not in target_url:
+            # Auto-convert internal Render host to external Oregon domain
+            target_url = target_url.replace("/", ".oregon-postgres.render.com/", 1)
 
-        for target_url in urls_to_try:
-            try:
-                raw_conn = psycopg2.connect(target_url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=5)
-                return DBWrapper(True, raw_conn)
-            except Exception:
-                pass
-        print("[WARNING] PostgreSQL connection failed for all targets. Falling back to SQLite.")
+        try:
+            raw_conn = psycopg2.connect(target_url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=5)
+            return DBWrapper(True, raw_conn)
+        except Exception as e:
+            print(f"[WARNING] PostgreSQL connection failed ({e}). Falling back to SQLite.")
 
     os.makedirs(os.path.dirname(DATABASE) or ".", exist_ok=True)
     raw_conn = sqlite3.connect(DATABASE, timeout=20)
