@@ -1,0 +1,686 @@
+{% extends 'base.html' %}
+{% block title %}Teacher Dashboard — Diploma Quiz Portal{% endblock %}
+{% block content %}
+<header class="topbar glass">
+  <div>
+    <div class="eyebrow">CONTROL CENTER</div>
+    <h1>Teacher Dashboard</h1>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <a class="primary" href="{{ url_for('mcq_converter_page') }}" style="text-decoration:none;">
+      <span>⚡ MCQ Studio & Converter</span>
+    </a>
+    <a class="secondary" href="{{ url_for('export_results', exam_id=selected_exam.id if selected_exam else None) }}">
+      <span>📥 Export CSV</span>
+    </a>
+    <a class="secondary" href="{{ url_for('logout') }}">
+      <span>Logout</span>
+    </a>
+  </div>
+</header>
+
+<section class="stats-grid">
+  <div class="stat glass">
+    <span>Total Students</span>
+    <strong>{{ total_students }}</strong>
+    <small>Unique PIN registrations</small>
+  </div>
+  <div class="stat glass">
+    <span>Exam Attempts</span>
+    <strong>{{ total_attempts }}</strong>
+    <small>Submissions recorded</small>
+  </div>
+  <div class="stat glass">
+    <span>Average Score</span>
+    <strong>{{ avg_score }}%</strong>
+    <small>Across all assessments</small>
+  </div>
+</section>
+
+<div class="dashboard-grid">
+  <section class="glass panel">
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">EXAMS</div>
+        <h2>Manage Assessments</h2>
+      </div>
+    </div>
+
+    <form action="{{ url_for('create_exam') }}" method="POST" class="compact-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input name="title" placeholder="New exam title" required>
+      <input name="description" placeholder="Description">
+      <input name="duration_minutes" type="number" min="1" max="240" value="45" title="Duration in minutes">
+      <button class="primary" type="submit">Create</button>
+    </form>
+
+    <div class="exam-list">
+      {% for exam in exams %}
+      <div class="exam-row {% if selected_exam and exam.id == selected_exam.id %}selected{% endif %}">
+        <a href="{{ url_for('teacher_dashboard', exam_id=exam.id) }}">
+          <strong>{{ exam.title }}</strong>
+          <small>{{ exam.question_count }} questions · {{ exam.duration_minutes }} min · {% if exam.active %}🟢
+            Published{% else %}🔴 Hidden{% endif %}</small>
+        </a>
+        <form action="{{ url_for('toggle_exam', exam_id=exam.id) }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="mini {% if exam.active %}danger{% endif %}" type="submit">
+            {{ 'Unpublish' if exam.active else 'Publish' }}
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if selected_exam %}
+  <section class="glass panel">
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">QUESTION BANK</div>
+        <h2>{{ selected_exam.title }}</h2>
+      </div>
+    </div>
+
+    <!-- Live Synchronous Broadcast Launcher -->
+    <div
+      style="margin-bottom:24px;padding:22px;background:{% if selected_exam.started %}rgba(16,185,129,0.08){% else %}rgba(139,92,246,0.08){% endif %};border:1px solid {% if selected_exam.started %}rgba(16,185,129,0.3){% else %}rgba(139,92,246,0.3){% endif %};border-radius:var(--radius-md);">
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
+        <div>
+          <div class="eyebrow"
+            style="color:{% if selected_exam.started %}var(--emerald){% else %}var(--purple-light){% endif %};">
+            SYNCHRONOUS BROADCAST LAUNCH</div>
+          <h3 style="margin:4px 0 0;font-family:var(--font-heading);font-size:1.2rem;color:#ffffff;">
+            {% if selected_exam.started %}🟢 Assessment is Live & In Progress{% else %}🚀 Live Exam Launcher for IT
+            Lab{% endif %}
+          </h3>
+        </div>
+        <span class="badge-score {% if selected_exam.started %}badge-excellent{% else %}badge-warning{% endif %}"
+          style="font-size:0.88rem;padding:6px 14px;">
+          {% if selected_exam.started %}🟢 STATUS: LIVE / STARTED{% else %}⏸️ STATUS: WAITING IN LOBBY{% endif %}
+        </span>
+      </div>
+      <p class="muted" style="font-size:0.88rem;margin-bottom:16px;color:var(--text-muted);">
+        {% if selected_exam.started %}
+        All connected student devices have launched into the live exam. Students will auto-submit when their timer
+        expires.
+        {% else %}
+        Students logging in with their PIN will enter a <strong>Student Waiting Lobby</strong>. Click <strong>Start Exam
+          for All Students</strong> below to launch the quiz simultaneously across all IT Lab PCs!
+        {% endif %}
+      </p>
+
+      {% if not selected_exam.started %}
+      <form action="{{ url_for('start_live_exam', exam_id=selected_exam.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="primary full" type="submit"
+          style="padding:14px;font-size:1.05rem;background:linear-gradient(135deg, #8b5cf6, #ec4899);box-shadow:0 8px 24px rgba(139,92,246,0.35);">
+          <span>🚀 START EXAM FOR ALL STUDENTS NOW 🚀</span>
+        </button>
+      </form>
+      {% else %}
+      <form action="{{ url_for('reset_lobby_exam', exam_id=selected_exam.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="secondary mini" type="submit" style="padding:8px 16px;">
+          <span>⏸️ Reset Exam Status to Waiting Lobby</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- Assessment Timer & Duration Control Panel -->
+    <div
+      style="margin-bottom:24px;padding:20px;background:rgba(14, 165, 233, 0.06);border:1px solid rgba(14, 165, 233, 0.25);border-radius:var(--radius-md);">
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow" style="color:var(--cyan);">TIMER CONFIGURATION</div>
+          <h3 style="margin:4px 0 0;font-family:var(--font-heading);font-size:1.15rem;color:#ffffff;">⏱️ Assessment
+            Duration & Timer Settings</h3>
+        </div>
+        <span class="badge-score badge-good"
+          style="font-size:0.9rem;padding:6px 14px;background:rgba(14, 165, 233, 0.15);border:1px solid rgba(14, 165, 233, 0.3);color:var(--cyan);">
+          Active Duration: <strong>{{ selected_exam.duration_minutes }} Minutes</strong>
+        </span>
+      </div>
+      <p class="muted" style="font-size:0.88rem;margin-bottom:16px;color:var(--text-muted);">
+        Adjust the allowed time limit for students taking this exam. Time limit applies automatically upon starting and
+        auto-submits when expired.
+      </p>
+
+      <form action="{{ url_for('update_exam_timer', exam_id=selected_exam.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <label
+          style="margin-top:0;font-weight:600;font-size:0.85rem;color:var(--text-main);margin-bottom:6px;display:block;">Quick
+          Duration Presets</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+          <button type="button" class="secondary mini" onclick="setTimerPreset(15)">15 mins</button>
+          <button type="button" class="secondary mini" onclick="setTimerPreset(30)">30 mins</button>
+          <button type="button" class="secondary mini" onclick="setTimerPreset(45)">45 mins</button>
+          <button type="button" class="secondary mini" onclick="setTimerPreset(60)">60 mins</button>
+          <button type="button" class="secondary mini" onclick="setTimerPreset(90)">90 mins</button>
+          <button type="button" class="secondary mini" onclick="setTimerPreset(120)">120 mins</button>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:180px;">
+            <label style="margin-top:0;font-size:0.82rem;margin-bottom:4px;display:block;">Exam Duration
+              (Minutes)</label>
+            <input id="durationMinutesInput" name="duration_minutes" type="number" min="1" max="300"
+              value="{{ selected_exam.duration_minutes }}" required style="margin:0;">
+          </div>
+          <button class="primary" type="submit" style="padding:10px 22px;">
+            <span>Save & Apply Timer ⏱️</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Student Answer Review Permission Panel -->
+    <div
+      style="margin-bottom:24px;padding:20px;background:{% if selected_exam.allow_review %}rgba(16,185,129,0.06){% else %}rgba(245,158,11,0.06){% endif %};border:1px solid {% if selected_exam.allow_review %}rgba(16,185,129,0.25){% else %}rgba(245,158,11,0.25){% endif %};border-radius:var(--radius-md);">
+      <div
+        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <div>
+          <div class="eyebrow"
+            style="color:{% if selected_exam.allow_review %}var(--emerald){% else %}var(--amber){% endif %};">STUDENT
+            REVIEW PERMISSIONS</div>
+          <h3 style="margin:4px 0 0;font-family:var(--font-heading);font-size:1.15rem;color:#ffffff;">
+            {% if selected_exam.allow_review %}🔓 Answer Review Unlocked{% else %}🔒 Answer Review Locked{% endif %}
+          </h3>
+        </div>
+        <span class="badge-score {% if selected_exam.allow_review %}badge-excellent{% else %}badge-warning{% endif %}"
+          style="font-size:0.88rem;padding:6px 14px;">
+          {% if selected_exam.allow_review %}🔓 STUDENTS CAN SEE ANSWERS{% else %}🔒 ANSWERS HIDDEN FROM STUDENTS{%
+          endif %}
+        </span>
+      </div>
+      <p class="muted" style="font-size:0.88rem;margin-bottom:16px;color:var(--text-muted);">
+        {% if selected_exam.allow_review %}
+        Students will see detailed question-by-question breakdowns with correct answers and explanations after
+        submitting.
+        {% else %}
+        Students will see their score, percentage, and rank podium, but detailed question-by-question answers remain
+        hidden.
+        {% endif %}
+      </p>
+
+      <form action="{{ url_for('toggle_exam_review', exam_id=selected_exam.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="{% if selected_exam.allow_review %}secondary{% else %}primary{% endif %}" type="submit"
+          style="padding:10px 20px;">
+          {% if selected_exam.allow_review %}
+          <span>🔒 Lock Answer Review (Hide Answers from Students)</span>
+          {% else %}
+          <span>🔓 Unlock Answer Review (Allow Students to View Answers)</span>
+          {% endif %}
+        </button>
+      </form>
+    </div>
+
+    <!-- Bulk Management Actions / Danger Zone -->
+    <div
+      style="margin-bottom:24px;padding:20px;background:rgba(244, 63, 94, 0.05);border:1px solid rgba(244, 63, 94, 0.25);border-radius:var(--radius-md);">
+      <div class="eyebrow" style="color:var(--rose);">⚠️ BULK ASSESSMENT MANAGEMENT</div>
+      <h3 style="margin:4px 0 8px;font-family:var(--font-heading);font-size:1.15rem;color:var(--text-main);">Bulk
+        Actions for "{{ selected_exam.title }}"</h3>
+      <p class="muted" style="font-size:0.85rem;margin-bottom:14px;">Perform 1-click bulk resets for this assessment.
+        Use with caution.</p>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <form action="{{ url_for('clear_exam_questions', exam_id=selected_exam.id) }}" method="POST"
+          onsubmit="return confirm('⚠️ ARE YOU SURE?\nThis will permanently delete ALL questions in this question bank!')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="secondary" type="submit"
+            style="background:rgba(244,63,94,0.15);border:1px solid rgba(244,63,94,0.4);color:var(--rose);padding:8px 16px;font-size:0.85rem;">
+            <span>🗑️ Delete All Questions</span>
+          </button>
+        </form>
+
+        <form action="{{ url_for('clear_exam_submissions', exam_id=selected_exam.id) }}" method="POST"
+          onsubmit="return confirm('⚠️ ARE YOU SURE?\nThis will clear ALL student submissions and rankings for this exam!')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="secondary" type="submit"
+            style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:var(--amber);padding:8px 16px;font-size:0.85rem;">
+            <span>🗑️ Clear All Student Submissions</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Smart Offline Parser -->
+    <div class="offline-generator"
+      style="margin-bottom:24px;padding:22px;border:1px solid rgba(139, 92, 246, 0.25);border-radius:var(--radius-md);background:rgba(139, 92, 246, 0.05);">
+      <div class="eyebrow">SMART OFFLINE DOCUMENT GENERATOR</div>
+      <h3 style="margin:6px 0 10px;font-family:var(--font-heading);font-size:1.2rem;">Import or Generate Questions from
+        Document</h3>
+      <p class="muted" style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px;">Runs 100% offline (PDF /
+        DOCX / TXT). Detects existing A-D MCQs or extracts key facts from lecture notes without sending data to external
+        servers.</p>
+
+      <form action="{{ url_for('generate_from_pdf') }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="exam_id" value="{{ selected_exam.id }}">
+
+        <label style="margin-top:0;">Unit / Subject</label>
+        <input type="text" name="unit" placeholder="e.g. Unit 1 - Computer Networks" required
+          style="margin-bottom:12px;">
+
+        <label>Document File</label>
+        <input type="file" name="pdf"
+          accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          required style="margin-bottom:12px;">
+
+        <div class="four-grid">
+          <div>
+            <label style="margin-top:0;">Parser Mode</label>
+            <select name="mode" title="Document mode">
+              <option value="auto">Auto detect</option>
+              <option value="import">Import existing MCQs</option>
+              <option value="generate">Generate from notes</option>
+            </select>
+          </div>
+          <div>
+            <label style="margin-top:0;">Target Questions</label>
+            <input name="count" type="number" min="1" max="50" value="10" placeholder="Questions">
+          </div>
+        </div>
+
+        <button class="primary full" type="submit" style="margin-top:14px;">
+          <span>Process Document Offline</span>
+          <span>⚡</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Direct Copy-Paste Raw Text Import Form -->
+    <div
+      style="margin-bottom:24px;padding:20px;background:rgba(15,23,42,0.4);border:1px dashed var(--panel-border-hover);border-radius:var(--radius-md);">
+      <h3 style="font-family:var(--font-heading);font-size:1.15rem;margin:0 0 6px;color:var(--cyan);">📋 Paste Raw Quiz
+        Text (Batch Import)</h3>
+      <p class="muted" style="margin-bottom:12px;font-size:0.85rem;">Copy-paste multiple MCQs with options (A-D) and
+        answers (e.g. <code>Ans: B</code> or answer keys) directly into the box below without creating a document file.
+      </p>
+
+      <form action="{{ url_for('import_pasted_text') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="exam_id" value="{{ selected_exam.id }}">
+
+        <label style="margin-top:0;">Subject / Unit Tag</label>
+        <input type="text" name="subject" placeholder="e.g. Computer Networks - Chapter 1" required
+          style="margin-bottom:10px;">
+
+        <label>Pasted Quiz Text & Options</label>
+        <textarea name="raw_text" rows="6"
+          placeholder="1. What does IP stand for?&#10;A) Internet Protocol&#10;B) Internal Process&#10;C) Image Processing&#10;D) Input Port&#10;Answer: A"
+          required style="margin-bottom:12px;font-family:var(--font-mono);font-size:0.88rem;"></textarea>
+
+        <button class="primary full" type="submit">
+          <span>⚡ Auto-Parse & Import All Questions</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Add Question Form -->
+    <div style="margin-bottom:20px;padding-top:10px;">
+      <h3 style="font-family:var(--font-heading);font-size:1.15rem;margin:0 0 12px;">Add Question Manually</h3>
+      <form action="{{ url_for('add_question') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="exam_id" value="{{ selected_exam.id }}">
+
+        <input name="subject" placeholder="Subject / Topic Tag" required style="margin-bottom:10px;">
+        <textarea name="question_text" rows="2" placeholder="Question Text" required
+          style="margin-bottom:10px;"></textarea>
+
+        <div class="four-grid">
+          <input name="option_a" placeholder="Option A" required>
+          <input name="option_b" placeholder="Option B" required>
+          <input name="option_c" placeholder="Option C" required>
+          <input name="option_d" placeholder="Option D" required>
+        </div>
+
+        <label>Correct Answer</label>
+        <select name="correct_option" style="margin-bottom:14px;">
+          <option value="A">Correct: Option A</option>
+          <option value="B">Correct: Option B</option>
+          <option value="C">Correct: Option C</option>
+          <option value="D">Correct: Option D</option>
+        </select>
+
+        <button class="secondary full" type="submit">
+          <span>+ Add Question to Bank</span>
+        </button>
+      </form>
+    </div>
+
+    <div
+      style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;margin-bottom:14px;gap:16px;flex-wrap:wrap;">
+      <h3 style="font-family:var(--font-heading);font-size:1.15rem;margin:0;">Manage Question Bank ({{ questions|length
+        }})</h3>
+      <input id="qSearchInput" type="text" placeholder="🔍 Search questions by subject or text..."
+        style="max-width:320px;padding:8px 14px;font-size:0.85rem;margin:0;">
+    </div>
+
+    <div class="question-list" id="qListContainer">
+      {% for q in questions %}
+      <div class="manage-q q-item-card"
+        data-search="{{ (q.subject + ' ' + q.question_text + ' ' + q.correct_option)|lower }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <strong style="color:var(--cyan);">#{{ loop.index }} · {{ q.subject }}</strong>
+          </div>
+          <p style="margin:4px 0 8px;font-size:0.95rem;line-height:1.4;">{{ q.question_text }}</p>
+          <div style="display:flex;gap:12px;font-size:0.8rem;color:var(--text-muted);flex-wrap:wrap;">
+            <span>A: {{ q.option_a }}</span>
+            <span>B: {{ q.option_b }}</span>
+            <span>C: {{ q.option_c }}</span>
+            <span>D: {{ q.option_d }}</span>
+          </div>
+          <small style="color:var(--emerald);font-family:var(--font-mono);display:inline-block;margin-top:6px;">✓
+            Correct Option: {{ q.correct_option }}</small>
+        </div>
+        <form action="{{ url_for('delete_question', question_id=q.id) }}" method="POST"
+          onsubmit="return confirm('Delete this question from question bank?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="mini danger" type="submit" style="padding:6px 12px;font-size:0.8rem;">🗑️ Delete</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="muted">No questions created for this assessment yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<script>
+  function setTimerPreset(mins) {
+    const input = document.getElementById('durationMinutesInput');
+    if (input) {
+      input.value = mins;
+      input.focus();
+    }
+  }
+
+  const searchInput = document.getElementById('qSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase().trim();
+      document.querySelectorAll('.q-item-card').forEach(card => {
+        const text = card.getAttribute('data-search') || '';
+        card.style.display = text.includes(term) ? 'flex' : 'none';
+      });
+    });
+  }
+</script>
+
+<!-- Top Performers Podium & Performance Tier Analytics -->
+<section class="glass panel" style="margin-bottom:24px;">
+  <div class="panel-head">
+    <div>
+      <div class="eyebrow">TOP PERFORMERS & CLASS BENCHMARKS</div>
+      <h2>{% if selected_exam %}{{ selected_exam.title }} — Analytics{% else %}Assessment Overview{% endif %}</h2>
+    </div>
+  </div>
+
+  <div class="podium-grid">
+    <!-- 1st Topper Card -->
+    <div class="podium-card podium-gold">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:var(--amber);">🥇 1ST TOPPER</span>
+          <span class="badge-score badge-topper-gold">RANK #1</span>
+        </div>
+        {% if first_topper %}
+        <h3 style="margin:4px 0;font-size:1.3rem;font-family:var(--font-heading);">{{ first_topper.student_name }}</h3>
+        <p style="margin:0 0 10px;font-family:var(--font-mono);font-size:0.85rem;color:var(--text-muted);">PIN: {{
+          first_topper.student_pin }}</p>
+        <div style="display:flex;gap:12px;align-items:baseline;">
+          <strong style="font-size:1.8rem;color:#fbbf24;font-family:var(--font-heading);">{{ first_topper.pct
+            }}%</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);">({{ first_topper.score }}/{{
+            first_topper.total_questions }} pts)</span>
+        </div>
+        <small style="color:var(--amber);font-family:var(--font-mono);display:block;margin-top:6px;">⏱️ {{
+          first_topper.time_taken_seconds // 60 }}m {{ first_topper.time_taken_seconds % 60 }}s taken</small>
+        {% else %}
+        <p class="muted" style="margin:12px 0 0;font-size:0.9rem;">No submissions recorded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 2nd Topper Card -->
+    <div class="podium-card podium-silver">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:#e2e8f0;">🥈 2ND TOPPER</span>
+          <span class="badge-score badge-topper-silver">RANK #2</span>
+        </div>
+        {% if second_topper %}
+        <h3 style="margin:4px 0;font-size:1.3rem;font-family:var(--font-heading);">{{ second_topper.student_name }}</h3>
+        <p style="margin:0 0 10px;font-family:var(--font-mono);font-size:0.85rem;color:var(--text-muted);">PIN: {{
+          second_topper.student_pin }}</p>
+        <div style="display:flex;gap:12px;align-items:baseline;">
+          <strong style="font-size:1.8rem;color:#f1f5f9;font-family:var(--font-heading);">{{ second_topper.pct
+            }}%</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);">({{ second_topper.score }}/{{
+            second_topper.total_questions }} pts)</span>
+        </div>
+        <small style="color:#cbd5e1;font-family:var(--font-mono);display:block;margin-top:6px;">⏱️ {{
+          second_topper.time_taken_seconds // 60 }}m {{ second_topper.time_taken_seconds % 60 }}s taken</small>
+        {% else %}
+        <p class="muted" style="margin:12px 0 0;font-size:0.9rem;">No 2nd topper recorded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Class Average Card -->
+    <div class="podium-card podium-avg">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:var(--cyan);">📊 CLASS AVERAGE</span>
+          <span class="badge-score badge-good">BENCHMARK</span>
+        </div>
+        <h3 style="margin:4px 0;font-size:1.3rem;font-family:var(--font-heading);">Assessment Mean</h3>
+        <p style="margin:0 0 10px;font-family:var(--font-mono);font-size:0.85rem;color:var(--text-muted);">{{
+          submissions|length }} total attempt{% if submissions|length != 1 %}s{% endif %}</p>
+        <div style="display:flex;gap:12px;align-items:baseline;">
+          <strong style="font-size:1.8rem;color:var(--cyan);font-family:var(--font-heading);">{{ exam_avg_pct
+            }}%</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);">Mean score</span>
+        </div>
+        <small style="color:var(--cyan);font-family:var(--font-mono);display:block;margin-top:6px;">🎯 Class performance
+          baseline</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Tier Distribution Bar -->
+  {% if submissions %}
+  {% set total_subs = submissions|length %}
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--panel-border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:0.88rem;">
+      <span style="font-weight:700;color:var(--text-main);">Performance Tier Distribution</span>
+      <span style="color:var(--text-muted);font-family:var(--font-mono);">{{ total_subs }} student{% if total_subs != 1
+        %}s{% endif %}</span>
+    </div>
+    <div class="tier-bar-wrap">
+      <div class="tier-segment tier-seg-toppers" style="width: {{ tier_pcts.toppers }}%;" title="Toppers (Rank 1 & 2)">
+      </div>
+      <div class="tier-segment tier-seg-above" style="width: {{ tier_pcts.above_avg }}%;" title="Above Average"></div>
+      <div class="tier-segment tier-seg-avg" style="width: {{ tier_pcts.average }}%;" title="Average"></div>
+      <div class="tier-segment tier-seg-below" style="width: {{ tier_pcts.below_avg }}%;" title="Needs Support"></div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.8rem;">
+      <span style="color:var(--amber);font-weight:600;">🥇/🥈 Toppers: {{ tier_counts.toppers }}</span>
+      <span style="color:var(--cyan);font-weight:600;">📈 Above Avg: {{ tier_counts.above_avg }}</span>
+      <span style="color:var(--purple-light);font-weight:600;">📊 Average: {{ tier_counts.average }}</span>
+      <span style="color:var(--rose);font-weight:600;">💡 Needs Support: {{ tier_counts.below_avg }}</span>
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+<!-- Ranked Submissions Table -->
+<section class="glass panel">
+  <div class="panel-head">
+    <div>
+      <div class="eyebrow">RANKED SUBMISSIONS TABLE</div>
+      <h2>Student Performance Breakdown</h2>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Performance Tier</th>
+          <th>Student PIN</th>
+          <th>Student Name</th>
+          <th>Score</th>
+          <th>Time Taken</th>
+          <th>Submitted At</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in submissions %}
+        <tr>
+          <td
+            style="font-family:var(--font-mono);font-weight:800;color:{% if sub.rank == 1 %}#fbbf24{% elif sub.rank == 2 %}#e2e8f0{% elif sub.rank == 3 %}#fdba74{% else %}var(--text-muted){% endif %};">
+            #{{ sub.rank }}
+          </td>
+          <td>
+            <span class="badge-score {{ sub.badge_class }}">
+              {{ sub.tier_icon }} {{ sub.tier }}
+            </span>
+          </td>
+          <td style="font-family:var(--font-mono);font-weight:700;">{{ sub.student_pin }}</td>
+          <td><strong>{{ sub.student_name }}</strong></td>
+          <td>
+            <span
+              class="badge-score {% if sub.pct >= 75 %}badge-excellent{% elif sub.pct >= 50 %}badge-good{% else %}badge-average{% endif %}">
+              {{ sub.score }} / {{ sub.total_questions }} ({{ sub.pct }}%)
+            </span>
+          </td>
+          <td style="font-family:var(--font-mono);">{{ sub.time_taken_seconds // 60 }}m {{ sub.time_taken_seconds % 60
+            }}s</td>
+          <td style="color:var(--text-muted);font-size:0.85rem;">{{ sub.submitted_at[:19].replace('T', ' ') }}</td>
+          <td>
+            <button class="secondary mini" onclick="openStudentReviewModal({{ sub.id }})"
+              style="padding:4px 10px;font-size:0.8rem;">
+              👁️ View Answers
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="muted" style="text-align:center;padding:30px;">No student submissions recorded for this
+            assessment yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Student Answer Review Modal -->
+<div id="studentReviewModal"
+  style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.85);backdrop-filter:blur(8px);z-index:9999;overflow-y:auto;padding:30px 16px;">
+  <div class="glass"
+    style="max-width:850px;margin:30px auto;padding:28px;border-radius:20px;border:1px solid var(--panel-border-hover);position:relative;">
+    <button onclick="closeStudentReviewModal()"
+      style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;">✕
+      Close</button>
+
+    <div style="margin-bottom:20px;border-bottom:1px solid var(--panel-border);padding-bottom:14px;">
+      <div class="eyebrow" style="color:var(--purple-light);">STUDENT RESPONSE INSPECTOR</div>
+      <h2 id="modalStudentTitle" style="margin:4px 0 2px;font-family:var(--font-heading);font-size:1.4rem;">Student
+        Answer Breakdown</h2>
+      <p id="modalStudentMeta" class="muted" style="font-size:0.9rem;margin:0;"></p>
+    </div>
+
+    <div id="modalReviewContent" style="display:flex;flex-direction:column;gap:14px;">
+      <p class="muted" style="text-align:center;padding:20px;">Loading student response data...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function openStudentReviewModal(subId) {
+    const modal = document.getElementById('studentReviewModal');
+    const title = document.getElementById('modalStudentTitle');
+    const meta = document.getElementById('modalStudentMeta');
+    const content = document.getElementById('modalReviewContent');
+
+    modal.style.display = 'block';
+    content.innerHTML = '<p class="muted" style="text-align:center;padding:20px;">Loading student response data...</p>';
+
+    try {
+      const res = await fetch(`/teacher/submissions/${subId}/review`);
+      const data = await res.json();
+      if (data.status !== 'success') {
+        content.innerHTML = `<p style="color:var(--rose);text-align:center;">Error loading student answers: ${data.message}</p>`;
+        return;
+      }
+
+      title.innerText = `Response Breakdown — ${data.student_name}`;
+      meta.innerText = `PIN: ${data.student_pin} · Score: ${data.score}/${data.total_questions} (${Math.round(data.score / data.total_questions * 100)}%) · Time: ${Math.floor(data.time_taken_seconds / 60)}m ${data.time_taken_seconds % 60}s`;
+
+      let html = '';
+      data.review_data.forEach((q, idx) => {
+        const isCor = q.is_correct;
+        const borderCol = isCor ? 'var(--emerald)' : 'var(--rose)';
+        const statusBadge = isCor ?
+          '<span style="background:rgba(16,185,129,0.2);color:var(--emerald);border:1px solid rgba(16,185,129,0.4);padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:700;">✓ CORRECT</span>' :
+          '<span style="background:rgba(244,63,94,0.2);color:var(--rose);border:1px solid rgba(244,63,94,0.4);padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:700;">✗ INCORRECT</span>';
+
+        const renderOpt = (optKey, optText) => {
+          let bg = 'rgba(255,255,255,0.03)';
+          let border = 'transparent';
+          let note = '';
+          if (q.selected === optKey) {
+            bg = isCor ? 'rgba(16,185,129,0.25)' : 'rgba(244,63,94,0.25)';
+            border = isCor ? 'var(--emerald)' : 'var(--rose)';
+            note += '<small style="color:var(--cyan);margin-left:6px;">(Student Choice)</small>';
+          }
+          if (q.correct === optKey) {
+            if (q.selected !== optKey) bg = 'rgba(16,185,129,0.15)';
+            border = 'var(--emerald)';
+            note += '<small style="color:var(--emerald);margin-left:6px;">✓ Correct Answer</small>';
+          }
+          return `<div style="padding:8px 12px;border-radius:8px;background:${bg};border:1px solid ${border};">
+          <strong>${optKey}.</strong> ${optText} ${note}
+        </div>`;
+        };
+
+        html += `
+        <div class="glass" style="padding:16px;border-radius:12px;border-left:4px solid ${borderCol};background:rgba(15,23,42,0.4);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.78rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);">QUESTION ${idx + 1} · ${q.subject}</span>
+            ${statusBadge}
+          </div>
+          <h4 style="margin:0 0 10px;font-size:0.98rem;">${q.question}</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:8px;font-size:0.88rem;">
+            ${renderOpt('A', q.A)}
+            ${renderOpt('B', q.B)}
+            ${renderOpt('C', q.C)}
+            ${renderOpt('D', q.D)}
+          </div>
+        </div>
+      `;
+      });
+      content.innerHTML = html;
+    } catch (err) {
+      content.innerHTML = `<p style="color:var(--rose);text-align:center;">Failed to load submission review.</p>`;
+    }
+  }
+
+  function closeStudentReviewModal() {
+    document.getElementById('studentReviewModal').style.display = 'none';
+  }
+</script>
+{% endblock %}

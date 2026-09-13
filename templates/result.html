@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}Result — Diploma Quiz Portal{% endblock %}
+{% block content %}
+{% set pct = ((score / total) * 100)|round(1) if total else 0 %}
+<div class="center-page" style="max-width:900px;margin:0 auto;padding-top:20px;">
+  <section class="glass result-card" style="margin-bottom:32px;">
+    <div class="success-mark">✓</div>
+    <div class="eyebrow">ASSESSMENT COMPLETE</div>
+    <h1>Well done, {{ name }}!</h1>
+    <p style="color:var(--text-muted);font-size:1.05rem;margin-bottom:16px;">{{ exam.title }}</p>
+
+    <div class="score-ring">
+      <strong>{{ score }}</strong>
+      <span>out of {{ total }}</span>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      {% if pct >= 75 %}
+      <span class="grade-badge grade-distinction">🌟 DISTINCTION ({{ pct }}%)</span>
+      {% elif pct >= 50 %}
+      <span class="grade-badge grade-pass">🎯 PASSED WITH MERIT ({{ pct }}%)</span>
+      {% else %}
+      <span class="grade-badge"
+        style="background:rgba(244,63,94,0.2);border:1px solid rgba(244,63,94,0.5);color:#fca5a5;">📚 NEEDS REVIEW ({{
+        pct }}%)</span>
+      {% endif %}
+    </div>
+
+    <p class="muted" style="margin-bottom:28px;">Your assessment submission has been securely recorded on the portal
+      database.</p>
+
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a class="primary" href="{{ url_for('logout') }}" style="min-width:180px;">
+        <span>Return to Home</span>
+        <span>→</span>
+      </a>
+      <a class="secondary" href="#review" style="min-width:180px;">
+        <span>🔍 Review Answers</span>
+      </a>
+    </div>
+  </section>
+
+  {% if student_sub %}
+  <section class="glass" style="padding:28px;border-radius:18px;margin-bottom:32px;">
+    <div
+      style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--panel-border);padding-bottom:12px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div class="eyebrow">CLASS BENCHMARKS & RANK</div>
+        <h2 style="margin:4px 0 0;">Your Performance Ranking</h2>
+      </div>
+      <span class="badge-score {{ student_sub.badge_class }}" style="font-size:0.95rem;padding:6px 14px;">
+        {{ student_sub.tier_icon }} {{ student_sub.tier }} (Rank #{{ student_sub.rank }} of {{ total_submissions }})
+      </span>
+    </div>
+
+    <div class="podium-grid" style="margin-bottom:0;">
+      <!-- Student's Rank Card -->
+      <div class="podium-card glass"
+        style="border:1px solid var(--panel-border-hover);background:rgba(139,92,246,0.1);">
+        <div>
+          <div style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:var(--purple-light);margin-bottom:6px;">
+            YOUR RANK</div>
+          <strong style="font-size:2.2rem;font-family:var(--font-heading);color:var(--text-main);">#{{ student_sub.rank
+            }}</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);display:block;margin-top:2px;">Out of {{
+            total_submissions }} student{% if total_submissions != 1 %}s{% endif %}</span>
+        </div>
+      </div>
+
+      <!-- 1st Topper Card -->
+      <div class="podium-card podium-gold">
+        <div>
+          <div style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:var(--amber);margin-bottom:6px;">🥇 1ST
+            TOPPER SCORE</div>
+          {% if first_topper %}
+          <strong style="font-size:2.2rem;font-family:var(--font-heading);color:#fbbf24;">{{ first_topper.pct
+            }}%</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);display:block;margin-top:2px;">{{
+            first_topper.student_name }}</span>
+          {% else %}
+          <strong style="font-size:1.5rem;color:var(--text-muted);">N/A</strong>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Class Average Card -->
+      <div class="podium-card podium-avg">
+        <div>
+          <div style="font-size:0.8rem;font-weight:800;letter-spacing:1px;color:var(--cyan);margin-bottom:6px;">📊 CLASS
+            AVERAGE</div>
+          <strong style="font-size:2.2rem;font-family:var(--font-heading);color:var(--cyan);">{{ exam_avg_pct
+            }}%</strong>
+          <span style="font-size:0.85rem;color:var(--text-muted);display:block;margin-top:2px;">Class score mean</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if review_data %}
+  {% if allow_review %}
+  <section id="review" class="glass" style="padding:28px;border-radius:18px;margin-bottom:40px;">
+    <div
+      style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-color);padding-bottom:12px;">
+      <div>
+        <div class="eyebrow">DETAILED EVALUATION</div>
+        <h2 style="margin:4px 0 0;">Question-by-Question Review</h2>
+      </div>
+      <span class="muted" style="font-size:0.9rem;">{{ score }} Correct · {{ total - score }} Incorrect</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      {% for item in review_data %}
+      <div class="glass"
+        style="padding:20px;border-radius:12px;border-left:4px solid {% if item.is_correct %}var(--emerald){% else %}var(--rose){% endif %};background:rgba(15,23,42,0.4);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <span style="font-size:0.8rem;font-weight:700;letter-spacing:1px;color:var(--text-muted);">QUESTION {{
+            loop.index }} · {{ item.subject }}</span>
+          {% if item.is_correct %}
+          <span
+            style="background:rgba(16,185,129,0.2);color:var(--emerald);border:1px solid rgba(16,185,129,0.4);padding:4px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;">✓
+            CORRECT</span>
+          {% else %}
+          <span
+            style="background:rgba(244,63,94,0.2);color:var(--rose);border:1px solid rgba(244,63,94,0.4);padding:4px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;">✗
+            INCORRECT</span>
+          {% endif %}
+        </div>
+        <h4 style="margin:0 0 14px;font-size:1.05rem;line-height:1.4;">{{ item.question }}</h4>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:8px;font-size:0.9rem;">
+          <div
+            style="padding:8px 12px;border-radius:8px;background:{% if item.selected == 'A' %}{% if item.is_correct %}rgba(16,185,129,0.25){% else %}rgba(244,63,94,0.25){% endif %}{% elif item.correct == 'A' %}rgba(16,185,129,0.15){% else %}rgba(255,255,255,0.03){% endif %};border:1px solid {% if item.correct == 'A' %}var(--emerald){% elif item.selected == 'A' and not item.is_correct %}var(--rose){% else %}transparent{% endif %};">
+            <strong>A.</strong> {{ item.A }}
+            {% if item.selected == 'A' %}<small style="color:var(--cyan);margin-left:6px;">(Your Answer)</small>{% endif
+            %}
+            {% if item.correct == 'A' %}<small style="color:var(--emerald);margin-left:6px;">✓ Correct Answer</small>{%
+            endif %}
+          </div>
+          <div
+            style="padding:8px 12px;border-radius:8px;background:{% if item.selected == 'B' %}{% if item.is_correct %}rgba(16,185,129,0.25){% else %}rgba(244,63,94,0.25){% endif %}{% elif item.correct == 'B' %}rgba(16,185,129,0.15){% else %}rgba(255,255,255,0.03){% endif %};border:1px solid {% if item.correct == 'B' %}var(--emerald){% elif item.selected == 'B' and not item.is_correct %}var(--rose){% else %}transparent{% endif %};">
+            <strong>B.</strong> {{ item.B }}
+            {% if item.selected == 'B' %}<small style="color:var(--cyan);margin-left:6px;">(Your Answer)</small>{% endif
+            %}
+            {% if item.correct == 'B' %}<small style="color:var(--emerald);margin-left:6px;">✓ Correct Answer</small>{%
+            endif %}
+          </div>
+          <div
+            style="padding:8px 12px;border-radius:8px;background:{% if item.selected == 'C' %}{% if item.is_correct %}rgba(16,185,129,0.25){% else %}rgba(244,63,94,0.25){% endif %}{% elif item.correct == 'C' %}rgba(16,185,129,0.15){% else %}rgba(255,255,255,0.03){% endif %};border:1px solid {% if item.correct == 'C' %}var(--emerald){% elif item.selected == 'C' and not item.is_correct %}var(--rose){% else %}transparent{% endif %};">
+            <strong>C.</strong> {{ item.C }}
+            {% if item.selected == 'C' %}<small style="color:var(--cyan);margin-left:6px;">(Your Answer)</small>{% endif
+            %}
+            {% if item.correct == 'C' %}<small style="color:var(--emerald);margin-left:6px;">✓ Correct Answer</small>{%
+            endif %}
+          </div>
+          <div
+            style="padding:8px 12px;border-radius:8px;background:{% if item.selected == 'D' %}{% if item.is_correct %}rgba(16,185,129,0.25){% else %}rgba(244,63,94,0.25){% endif %}{% elif item.correct == 'D' %}rgba(16,185,129,0.15){% else %}rgba(255,255,255,0.03){% endif %};border:1px solid {% if item.correct == 'D' %}var(--emerald){% elif item.selected == 'D' and not item.is_correct %}var(--rose){% else %}transparent{% endif %};">
+            <strong>D.</strong> {{ item.D }}
+            {% if item.selected == 'D' %}<small style="color:var(--cyan);margin-left:6px;">(Your Answer)</small>{% endif
+            %}
+            {% if item.correct == 'D' %}<small style="color:var(--emerald);margin-left:6px;">✓ Correct Answer</small>{%
+            endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <section id="review" class="glass"
+    style="padding:28px;border-radius:18px;margin-bottom:40px;text-align:center;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.25);">
+    <div style="font-size:2.5rem;margin-bottom:12px;">🔒</div>
+    <div class="eyebrow" style="color:var(--amber);">DETAILED REVIEW LOCKED</div>
+    <h3 style="margin:6px 0 10px;font-family:var(--font-heading);color:#ffffff;">Question Breakdown Hidden by Teacher
+    </h3>
+    <p class="muted" style="max-width:520px;margin:0 auto;line-height:1.5;">
+      Your score and rank have been recorded in the portal. Detailed question-by-question answer breakdowns are
+      currently locked by your teacher for this assessment session.
+    </p>
+  </section>
+  {% endif %}
+  {% endif %}
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    if (typeof confetti === 'function') {
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+    }
+
+    // Play synthesized Web Audio fanfare sound on pass
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.08, ctx.currentTime + idx * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.12 + 0.3);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + idx * 0.12);
+          osc.stop(ctx.currentTime + idx * 0.12 + 0.35);
+        });
+      }
+    } catch (e) { }
+  });
+</script>
+{% endblock %}

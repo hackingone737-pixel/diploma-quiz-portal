@@ -1,0 +1,47 @@
+🚀 IT Lab & Classroom Operating Guide for Diploma Quiz Portal
+Here is the complete step-by-step guide on how to host, run, and manage exams for all students in your IT Lab or classroom.
+
+💻 STEP 1: Start the Server (Teacher PC)
+Open Command Prompt or PowerShell on the Teacher PC.
+Find your Teacher PC's local IP address:
+cmd
+ipconfig
+(Look for IPv4 Address, e.g., 192.168.1.100 or 10.0.0.15).
+Start the Quiz Portal server:
+cmd
+python app.py
+(The server is now live on port 5000 across your local Wi-Fi / IT Lab LAN network).
+🎓 STEP 2: How Students Connect & Enter the Waiting Lobby
+On all Student PCs or mobile devices connected to the IT Lab network, open Google Chrome or Edge.
+Go to the Teacher IP address:
+text
+http://<TEACHER-IP>:5000
+(e.g., http://192.168.1.100:5000)
+Each student enters:
+Student PIN / Roll Number (e.g., 101, 21DIP05)
+Full Name (e.g., Rahul Sharma)
+Students click Start Assessment.
+Student Waiting Lobby: Students will see a live radar screen saying "Waiting for Teacher to Start Assessment...". They cannot begin answering questions until you signal start.
+🚀 STEP 3: Teacher Starts Exam for All Students Simultaneously
+Open http://localhost:5000/teacher_login on the Teacher PC.
+Login with credentials:
+Username: admin
+Password: admin123
+Set Timer Duration: Select a preset (e.g., 15m, 30m, 45m) or enter a custom duration.
+Broadcast Start: Click the big green button:
+text
+🚀 START EXAM FOR ALL STUDENTS NOW
+Simultaneous Launch: Instantly, all student screens across the IT Lab will launch into the quiz with synchronized countdown timers.
+🔒 STEP 4: Managing Answer Review Visibility & Results
+A. During / Immediately After Exam
+Keep Answer Review Locked on the Teacher Dashboard (🔒 Lock Answer Review).
+When students submit, they will see their Score, Percentage, and Rank Podium (1st, 2nd, 3rd Topper), but detailed question-by-question breakdowns remain hidden to prevent answer sharing.
+B. Teacher Inspects Student Answers Anytime
+On the Teacher Dashboard Ranked Submissions Table, click 👁️ View Answers next to any student's name to view a modal popup of their exact choices.
+C. Allowing Students to View Detailed Answers
+Once all students have completed the exam, click 🔓 Unlock Answer Review on the Teacher Dashboard.
+Discreet Student Answer Lookup: Tell students to go back to the home page (http://<TEACHER-IP>:5000) and enter their Student PIN again.
+The system will open their result page with full question-by-question answer breakdowns (showing correct answers and explanations).
+🗑️ STEP 5: Resetting for the Next Student Batch
+To Clear Student List / Reset Ranks: On the Teacher Dashboard, click 🗑️ Clear All Student Submissions. All ranks and attempt history will reset so a new batch of students can take the exam.
+To Change Questions: Click 🗑️ Delete All Questions to clear the question bank, then use the Smart Text-to-MCQ Converter or copy-paste tool to load questions for a new subject.

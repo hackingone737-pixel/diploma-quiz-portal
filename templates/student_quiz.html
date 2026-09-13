@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam.title }} — Live Exam{% endblock %}
+{% block content %}
+<div id="submitOverlay"
+  style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.88);backdrop-filter:blur(6px);z-index:99999;flex-direction:column;align-items:center;justify-content:center;color:#ffffff;text-align:center;">
+  <div style="font-size:3rem;margin-bottom:16px;animation:spin 1.5s linear infinite;">⏳</div>
+  <h2 style="font-family:var(--font-heading);font-size:1.6rem;margin:0 0 8px;color:var(--cyan);">Submitting
+    Assessment...</h2>
+  <p style="font-size:0.95rem;color:var(--text-muted);margin:0;">Analyzing answers and calculating rank standings.
+    Please wait a moment...</p>
+</div>
+
+<!-- Custom Instant Confirmation Modal -->
+<div id="confirmModal"
+  style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.75);backdrop-filter:blur(5px);z-index:99990;align-items:center;justify-content:center;">
+  <div class="glass"
+    style="max-width:440px;width:90%;padding:28px;border-radius:16px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.5);">
+    <div style="font-size:2.5rem;margin-bottom:12px;">📑</div>
+    <h3 style="font-family:var(--font-heading);font-size:1.4rem;margin:0 0 8px;color:#ffffff;">Submit Your Assessment?
+    </h3>
+    <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:20px;">You are about to finish your exam. Once
+      submitted, you cannot change your answers.</p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button type="button" class="secondary" onclick="closeConfirmModal()" style="flex:1;">Review Answers</button>
+      <button type="button" class="primary" onclick="proceedSubmit()" style="flex:1;">Yes, Submit Now 🚀</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+</style>
+<div class="exam-header glass">
+  <div>
+    <div class="eyebrow">LIVE ASSESSMENT</div>
+    <h1>{{ exam.title }}</h1>
+    <p>👤 <strong>{{ student_name }}</strong> &nbsp;·&nbsp; 💳 <strong>{{ student_pin }}</strong></p>
+  </div>
+  <div class="timer-box">
+    <span class="timer-label">Time Remaining</span>
+    <div class="timer" id="timer">--:--</div>
+  </div>
+</div>
+
+<form id="quizForm" action="{{ url_for('submit_quiz') }}" method="POST">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <div class="question-layout">
+    <aside class="progress-panel glass">
+      <div class="progress-header">
+        <strong>Progress</strong>
+        <span id="progressText"
+          style="font-family:var(--font-mono);font-size:0.88rem;color:var(--cyan);font-weight:700;">0 / {{
+          questions|length }}</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <div class="question-nav">
+        {% for q in questions %}
+        <a href="#q{{ loop.index }}" data-q="{{ loop.index }}" id="nav_q{{ loop.index }}">{{ loop.index }}</a>
+        {% endfor %}
+      </div>
+
+      <div class="legend">
+        <span class="dot"></span>
+        <span>Green = Answered</span>
+      </div>
+
+      <button class="danger full" type="button" onclick="openConfirmModal()">
+        <span>Submit Exam</span>
+      </button>
+    </aside>
+
+    <section class="questions">
+      {% for q in questions %}
+      {% set q_num = loop.index %}
+      <article class="question-card glass" id="q{{ loop.index }}">
+        <div class="q-top">
+          <span>QUESTION {{ loop.index }} OF {{ questions|length }}</span>
+          <small>{{ q.subject }}</small>
+        </div>
+        <h2>{{ q.question_text }}</h2>
+
+        <div class="options">
+          {% for letter, text in [('A',q.option_a),('B',q.option_b),('C',q.option_c),('D',q.option_d)] %}
+          <label class="option" id="opt_{{ q.id }}_{{ letter }}">
+            <input type="radio" name="question_{{ q.id }}" value="{{ letter }}" data-qnum="{{ q_num }}">
+            <span class="option-letter">{{ letter }}</span>
+            <span>{{ text }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+
+      <button class="primary full submit-bottom" type="button" onclick="openConfirmModal()">
+        <span>Submit Exam Securely</span>
+        <span>✓</span>
+      </button>
+    </section>
+  </div>
+</form>
+
+<script>
+  const totalQuestions = {{ questions| length }};
+  const initialRemaining = {{ remaining| int }};
+  let remaining = initialRemaining;
+  const timer = document.getElementById('timer');
+  const form = document.getElementById('quizForm');
+  const progressText = document.getElementById('progressText');
+  const progressFill = document.getElementById('progressFill');
+  let submitted = false;
+
+  function updateProgress() {
+    const answeredCount = new Set([...document.querySelectorAll('.option input:checked')].map(i => i.getAttribute('data-qnum'))).size;
+    progressText.textContent = `${answeredCount} / ${totalQuestions}`;
+    const percentage = (answeredCount / totalQuestions) * 100;
+    progressFill.style.width = `${percentage}%`;
+  }
+
+  function renderTimer() {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    timer.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (remaining <= 300) {
+      timer.classList.add('danger-timer');
+    }
+  }
+
+  renderTimer();
+  const interval = setInterval(() => {
+    remaining--;
+    renderTimer();
+    if (remaining <= 0) {
+      clearInterval(interval);
+      proceedSubmit(true);
+    }
+  }, 1000);
+
+  function openConfirmModal() {
+    if (submitted) return false;
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.style.display = 'flex';
+    return false;
+  }
+
+  function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function proceedSubmit(isAutoSubmit = false) {
+    if (submitted) return;
+    submitted = true;
+    if (typeof interval !== 'undefined') clearInterval(interval);
+    closeConfirmModal();
+    const overlay = document.getElementById('submitOverlay');
+    if (overlay) {
+      if (isAutoSubmit) {
+        const titleEl = overlay.querySelector('h2');
+        const descEl = overlay.querySelector('p');
+        if (titleEl) titleEl.textContent = '⏰ Time Expired! Auto-Submitting...';
+        if (descEl) descEl.textContent = 'Exam duration limit reached. Gracefully processing your submitted answers now.';
+      }
+      overlay.style.display = 'flex';
+    }
+    document.getElementById('quizForm').submit();
+  }
+
+  function playTapSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(650, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(350, ctx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+      }
+    } catch (e) { }
+  }
+
+  document.querySelectorAll('.option input').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const radio = e.target;
+      const qnum = radio.getAttribute('data-qnum');
+
+      playTapSound();
+
+      // Clear selected class from sister options
+      const card = radio.closest('.question-card');
+      card.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected-option'));
+
+      // Highlight active option card
+      radio.closest('.option').classList.add('selected-option');
+
+      // Mark sidebar nav
+      const navLink = document.getElementById(`nav_q${qnum}`);
+      if (navLink) navLink.classList.add('answered');
+
+      updateProgress();
+    });
+  });
+
+  // Initialize active styling if re-rendered
+  document.querySelectorAll('.option input:checked').forEach(radio => {
+    radio.closest('.option').classList.add('selected-option');
+    const qnum = radio.getAttribute('data-qnum');
+    const navLink = document.getElementById(`nav_q${qnum}`);
+    if (navLink) navLink.classList.add('answered');
+  });
+  updateProgress();
+</script>
+{% endblock %}

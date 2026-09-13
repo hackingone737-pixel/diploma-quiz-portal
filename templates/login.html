@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Student Login — Diploma Quiz Portal{% endblock %}
+{% block content %}
+<div class="auth-shell">
+  <section class="hero-card glass">
+    <div class="eyebrow">DIPLOMA ASSESSMENT PORTAL</div>
+    <h1>Test your knowledge.<br><span>Track your progress.</span></h1>
+    <p>Secure online MCQ assessments with live timers, offline compatibility, and instant evaluation.</p>
+
+    <div class="feature-grid">
+      <div class="feature-item">
+        <span class="f-icon">⚡</span>
+        <strong>Timed Exams</strong>
+        <span>Live countdown & auto-submission</span>
+      </div>
+      <div class="feature-item">
+        <span class="f-icon">🎯</span>
+        <strong>Curated MCQs</strong>
+        <span>Core diploma syllabus coverage</span>
+      </div>
+      <div class="feature-item">
+        <span class="f-icon">📊</span>
+        <strong>Instant Score</strong>
+        <span>Immediate detailed feedback</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass auth-card">
+    <div class="card-heading">
+      <div>
+        <div class="eyebrow">STUDENT ACCESS</div>
+        <h2>Start an assessment</h2>
+      </div>
+      <div class="icon-badge">🎓</div>
+    </div>
+
+    <form action="{{ url_for('login') }}" method="POST" autocomplete="off">
+      <input type="hidden" name="role" value="student">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <label for="exam_id">Choose exam</label>
+      <select id="exam_id" name="exam_id" required>
+        <option value="">Select an active exam</option>
+        {% for exam in exams %}
+        <option value="{{ exam.id }}">{{ exam.title }} · {{ exam.description }} ({{ exam.duration_minutes }} min · {{
+          exam.question_count }} Q)</option>
+        {% endfor %}
+      </select>
+
+      <label for="student_pin">Student PIN / Register No.</label>
+      <input id="student_pin" type="text" name="student_pin" placeholder="e.g. 23CSE001" maxlength="80" required>
+
+      <label for="student_name">Full Name</label>
+      <input id="student_name" type="text" name="student_name" placeholder="Enter your full name" maxlength="120"
+        required>
+
+      <button class="primary full" type="submit">
+        <span>Continue to Exam</span>
+        <span style="font-size:1.1rem">→</span>
+      </button>
+    </form>
+
+    <div class="divider"><span>Faculty / Staff?</span></div>
+    <a class="secondary full" href="{{ url_for('teacher_login_page') }}">
+      <span>🔐</span>
+      <span>Open Teacher Dashboard</span>
+    </a>
+  </section>
+</div>
+{% endblock %}

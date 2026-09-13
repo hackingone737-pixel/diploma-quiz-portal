@@ -1,0 +1,674 @@
+{% extends 'base.html' %}
+{% block title %}Smart Text-to-MCQ Converter & Studio — Teacher Portal{% endblock %}
+
+{% block content %}
+<header class="topbar glass" style="margin-bottom:20px;">
+    <div>
+        <div class="eyebrow" style="color:var(--cyan);letter-spacing:1.5px;">TEACHER STUDIO TOOL</div>
+        <h1 style="font-family:var(--font-heading);font-size:1.8rem;margin:4px 0 0;">⚡ Smart Text-to-MCQ Converter &
+            Studio</h1>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+        <a class="secondary" href="{{ url_for('teacher_dashboard') }}">
+            <span>← Teacher Dashboard</span>
+        </a>
+    </div>
+</header>
+
+<div class="converter-container" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;">
+    <!-- Left Side: Unstructured Text Input & Controls -->
+    <section class="glass panel" style="display:flex;flex-direction:column;height:100%;">
+        <div class="panel-head" style="margin-bottom:12px;">
+            <div>
+                <div class="eyebrow">RAW TEXT INPUT</div>
+                <h2 style="font-size:1.25rem;margin-top:2px;">📋 Paste Quiz / Lecture Notes</h2>
+            </div>
+            <button class="mini secondary" id="btnLoadSample" type="button">
+                <span>✨ Load Sample MCQs</span>
+            </button>
+        </div>
+
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;line-height:1.4;">
+            Paste unstructured question text with options (A-D) and answer indicators (e.g., <code>Answer: B</code>,
+            <code>Ans: C</code>, or global answer key). The parser will automatically repair line breaks, extract
+            options, and infer missing keys.
+        </p>
+
+        <textarea id="rawTextInput" rows="18"
+            placeholder="Paste your questions here...&#10;&#10;Example:&#10;What is the capital of India?&#10;A) Mumbai&#10;B) Delhi&#10;C) Chennai&#10;D) Hyderabad&#10;Answer: B&#10;&#10;Which language is used for web pages?&#10;A) Python&#10;B) Java&#10;C) HTML&#10;D) C++&#10;Answer: C"
+            style="width:100%;flex:1;min-height:360px;padding:14px;font-family:var(--font-mono);font-size:0.88rem;background:rgba(15,23,42,0.6);border:1px solid var(--panel-border-hover);border-radius:var(--radius-md);color:var(--text-main);resize:vertical;"></textarea>
+
+        <div style="display:flex;gap:12px;margin-top:16px;">
+            <button class="primary full" id="btnConvert" type="button"
+                style="padding:12px;font-size:1rem;font-weight:700;">
+                <span>⚡ Detect & Convert to Structured MCQs</span>
+            </button>
+            <button class="secondary" id="btnClearText" type="button" style="padding:12px 18px;">
+                <span>🧹 Clear</span>
+            </button>
+        </div>
+
+        <div id="parseStatsBar"
+            style="display:none;margin-top:16px;padding:12px 16px;background:rgba(139, 92, 246, 0.1);border:1px solid rgba(139, 92, 246, 0.3);border-radius:var(--radius-sm);font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <strong id="statCount" style="color:var(--cyan);font-size:1rem;">0 Questions</strong>
+                <span id="statWarnings" style="margin-left:10px;color:var(--amber);">0 Warnings</span>
+            </div>
+            <div id="statDiffSummary" style="font-family:var(--font-mono);color:var(--text-muted);">
+                Easy: 0 | Med: 0 | Hard: 0
+            </div>
+        </div>
+    </section>
+
+    <!-- Right Side: Structured MCQ Studio Editor -->
+    <section class="glass panel" style="display:flex;flex-direction:column;">
+        <div class="panel-head" style="margin-bottom:12px;">
+            <div>
+                <div class="eyebrow">MCQ STUDIO EDITOR</div>
+                <h2 style="font-size:1.25rem;margin-top:2px;">✏️ Structured Questions & Validation</h2>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="mini secondary" id="btnAddBlank" type="button">+ Add Blank</button>
+                <button class="mini secondary" id="btnAutoFixAll" type="button">🛠️ Auto-Fix Warnings</button>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div
+            style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--panel-border);padding-bottom:10px;overflow-x:auto;">
+            <button class="tab-btn active" data-filter="all">All (<span id="countAll">0</span>)</button>
+            <button class="tab-btn" data-filter="warnings">Warnings (<span id="countWarn">0</span>) ⚠️</button>
+            <button class="tab-btn" data-filter="Easy">Easy (<span id="countEasy">0</span>)</button>
+            <button class="tab-btn" data-filter="Medium">Medium (<span id="countMed">0</span>)</button>
+            <button class="tab-btn" data-filter="Hard">Hard (<span id="countHard">0</span>)</button>
+        </div>
+
+        <!-- Questions Container -->
+        <div id="questionsContainer"
+            style="flex:1;max-height:540px;overflow-y:auto;padding-right:6px;display:flex;flex-direction:column;gap:16px;">
+            <div id="emptyPlaceholder" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                <span style="font-size:2.5rem;display:block;margin-bottom:10px;">📋</span>
+                <strong style="font-size:1.1rem;color:var(--text-main);">No questions generated yet</strong>
+                <p style="font-size:0.88rem;margin-top:6px;">Paste unstructured text on the left and click "Detect &
+                    Convert", or click "+ Add Blank" to start manually.</p>
+            </div>
+        </div>
+
+        <!-- Studio Toolbar & Export Options -->
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--panel-border);">
+            <div
+                style="font-weight:700;font-size:0.9rem;margin-bottom:10px;color:var(--cyan);display:flex;justify-content:space-between;align-items:center;">
+                <span>📦 Export & Question Bank Import</span>
+                <small style="color:var(--text-muted);font-weight:normal;">Teacher Auth Active 🔒</small>
+            </div>
+
+            <!-- Target Exam Dropdown & Import Button -->
+            <div
+                style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;align-items:center;background:rgba(15,23,42,0.4);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--panel-border);">
+                <select id="selectExam" style="flex:1;min-width:200px;padding:8px 12px;font-size:0.88rem;margin:0;">
+                    <option value="">Select Target Exam to Import Into...</option>
+                    {% for e in exams %}
+                    <option value="{{ e.id }}">{{ e.title }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="inputSubject" placeholder="Subject / Tag (e.g. Unit 1)" value="General"
+                    style="width:160px;padding:8px 12px;font-size:0.88rem;margin:0;">
+                <button class="primary" id="btnImportToBank" type="button" style="padding:8px 16px;">
+                    <span>⚡ Import to Exam</span>
+                </button>
+            </div>
+
+            <!-- Export Action Buttons Grid -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <button class="secondary" id="btnExportDocx" type="button" style="justify-content:center;">
+                    <span>📄 Export Word (.docx)</span>
+                </button>
+                <button class="secondary" id="btnPrintReady" type="button" style="justify-content:center;">
+                    <span>🖨️ Print / Save PDF</span>
+                </button>
+                <button class="secondary" id="btnExportCsv" type="button" style="justify-content:center;">
+                    <span>📥 Export CSV</span>
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Print-Ready Modal -->
+<div id="printModal"
+    style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div
+        style="background:var(--panel-bg);border:1px solid var(--panel-border-hover);border-radius:var(--radius-lg);width:90%;max-width:850px;max-height:90vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);">
+        <div
+            style="padding:16px 24px;border-bottom:1px solid var(--panel-border);display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-family:var(--font-heading);color:var(--cyan);">🖨️ Print / PDF Document Preview
+            </h3>
+            <div style="display:flex;gap:10px;">
+                <button class="primary" id="btnExecutePrint" type="button">Print Now / Save PDF</button>
+                <button class="secondary" id="btnClosePrint" type="button">Close</button>
+            </div>
+        </div>
+        <div id="printArea"
+            style="flex:1;overflow-y:auto;padding:30px;background:#ffffff;color:#1e293b;font-family:sans-serif;">
+            <!-- Printable Content Rendered Dynamically -->
+        </div>
+    </div>
+</div>
+
+<style>
+    .tab-btn {
+        background: transparent;
+        border: 1px solid var(--panel-border);
+        color: var(--text-muted);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.8rem;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+        border-color: var(--cyan);
+        color: var(--text-main);
+    }
+
+    .tab-btn.active {
+        background: rgba(6, 182, 212, 0.15);
+        border-color: var(--cyan);
+        color: var(--cyan);
+        font-weight: 700;
+    }
+
+    .studio-card {
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--panel-border);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        transition: border-color 0.2s ease;
+    }
+
+    .studio-card:hover {
+        border-color: var(--panel-border-hover);
+    }
+
+    .studio-card.has-warning {
+        border-color: rgba(245, 158, 11, 0.5);
+        background: rgba(245, 158, 11, 0.03);
+    }
+
+    .studio-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .studio-opts-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+
+        #printArea,
+        #printArea * {
+            visibility: visible;
+        }
+
+        #printArea {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 0;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const csrfToken = "{{ csrf_token }}";
+        let questionsData = [];
+        let currentFilter = 'all';
+
+        const rawTextInput = document.getElementById('rawTextInput');
+        const btnConvert = document.getElementById('btnConvert');
+        const btnClearText = document.getElementById('btnClearText');
+        const btnLoadSample = document.getElementById('btnLoadSample');
+        const questionsContainer = document.getElementById('questionsContainer');
+        const emptyPlaceholder = document.getElementById('emptyPlaceholder');
+        const parseStatsBar = document.getElementById('parseStatsBar');
+        const btnAddBlank = document.getElementById('btnAddBlank');
+        const btnAutoFixAll = document.getElementById('btnAutoFixAll');
+        const selectExam = document.getElementById('selectExam');
+        const inputSubject = document.getElementById('inputSubject');
+        const btnImportToBank = document.getElementById('btnImportToBank');
+        const btnExportDocx = document.getElementById('btnExportDocx');
+        const btnPrintReady = document.getElementById('btnPrintReady');
+        const btnExportCsv = document.getElementById('btnExportCsv');
+        const printModal = document.getElementById('printModal');
+        const printArea = document.getElementById('printArea');
+        const btnClosePrint = document.getElementById('btnClosePrint');
+        const btnExecutePrint = document.getElementById('btnExecutePrint');
+
+        // Load sample text
+        btnLoadSample.addEventListener('click', () => {
+            rawTextInput.value = `What is the capital of India?
+A) Mumbai
+B) Delhi
+C) Chennai
+D) Hyderabad
+Answer: B
+
+Which language is used for web pages?
+A) Python
+B) Java
+C) HTML
+D) C++
+Answer: C
+
+A 4-to-1 multiplexer requires how many select lines?
+A) 1
+B) 2
+C) 3
+D) 4
+Ans: B
+
+What is the main purpose of the Data Link Layer?
+A) Frame-to-frame communication
+B) Creating websites
+C) Storing files
+D) Managing passwords
+Ans: A
+
+Calculate the time complexity of Binary Search in a sorted array:
+A) O(n)
+B) O(n^2)
+C) O(log n)
+D) O(1)
+Answer: C`;
+            triggerParse();
+        });
+
+        btnClearText.addEventListener('click', () => {
+            rawTextInput.value = '';
+            questionsData = [];
+            renderQuestions();
+        });
+
+        btnConvert.addEventListener('click', () => {
+            triggerParse();
+        });
+
+        async function triggerParse() {
+            const text = rawTextInput.value.trim();
+            if (!text) {
+                alert('Please paste some text to convert.');
+                return;
+            }
+            btnConvert.disabled = true;
+            btnConvert.innerHTML = '<span>⏳ Processing Text...</span>';
+
+            try {
+                const resp = await fetch('/api/parse_mcq_text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw_text: text })
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    questionsData = data.questions;
+                    renderQuestions();
+                } else {
+                    alert(data.message || 'Parsing failed.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to parse text. Please check your connection.');
+            } finally {
+                btnConvert.disabled = false;
+                btnConvert.innerHTML = '<span>⚡ Detect & Convert to Structured MCQs</span>';
+            }
+        }
+
+        function renderQuestions() {
+            if (!questionsData || questionsData.length === 0) {
+                emptyPlaceholder.style.display = 'block';
+                parseStatsBar.style.display = 'none';
+                questionsContainer.innerHTML = '';
+                questionsContainer.appendChild(emptyPlaceholder);
+                updateCounts();
+                return;
+            }
+
+            emptyPlaceholder.style.display = 'none';
+            parseStatsBar.style.display = 'flex';
+
+            // Clear container
+            questionsContainer.innerHTML = '';
+
+            let totalWarns = 0;
+            let easyCount = 0, medCount = 0, hardCount = 0;
+
+            questionsData.forEach((q, idx) => {
+                q.id = idx + 1; // Auto renumber
+                const warns = q.warnings || [];
+                if (warns.length > 0) totalWarns++;
+
+                if (q.difficulty === 'Easy') easyCount++;
+                else if (q.difficulty === 'Hard') hardCount++;
+                else medCount++;
+
+                // Filter check
+                if (currentFilter === 'warnings' && warns.length === 0) return;
+                if (currentFilter === 'Easy' && q.difficulty !== 'Easy') return;
+                if (currentFilter === 'Medium' && q.difficulty !== 'Medium') return;
+                if (currentFilter === 'Hard' && q.difficulty !== 'Hard') return;
+
+                const card = document.createElement('div');
+                card.className = `studio-card ${warns.length > 0 ? 'has-warning' : ''}`;
+
+                card.innerHTML = `
+        <div class="studio-card-head">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-family:var(--font-mono);font-weight:800;color:var(--cyan);font-size:0.9rem;">#${q.id}</span>
+            <select class="q-diff-select" data-idx="${idx}" style="padding:2px 8px;font-size:0.75rem;margin:0;border-radius:4px;">
+              <option value="Easy" ${q.difficulty === 'Easy' ? 'selected' : ''}>🟢 Easy</option>
+              <option value="Medium" ${q.difficulty === 'Medium' ? 'selected' : ''}>🟡 Medium</option>
+              <option value="Hard" ${q.difficulty === 'Hard' ? 'selected' : ''}>🔴 Hard</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="q-correct-select" data-idx="${idx}" style="padding:2px 8px;font-size:0.8rem;margin:0;border-radius:4px;font-weight:bold;color:var(--emerald);">
+              <option value="A" ${q.correct === 'A' ? 'selected' : ''}>Correct: A</option>
+              <option value="B" ${q.correct === 'B' ? 'selected' : ''}>Correct: B</option>
+              <option value="C" ${q.correct === 'C' ? 'selected' : ''}>Correct: C</option>
+              <option value="D" ${q.correct === 'D' ? 'selected' : ''}>Correct: D</option>
+            </select>
+            <button class="mini danger btn-delete-q" data-idx="${idx}" type="button" title="Delete Question">🗑️</button>
+          </div>
+        </div>
+
+        ${warns.length > 0 ? `
+          <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:var(--amber);padding:6px 10px;border-radius:4px;font-size:0.78rem;">
+            ⚠️ ${warns.join(' · ')}
+          </div>
+        ` : ''}
+
+        <div>
+          <textarea class="q-text-input" data-idx="${idx}" rows="2" style="width:100%;padding:8px;font-size:0.9rem;border-radius:4px;border:1px solid var(--panel-border);background:rgba(15,23,42,0.4);color:var(--text-main);">${escapeHtml(q.question)}</textarea>
+        </div>
+
+        <div class="studio-opts-grid">
+          <div>
+            <small style="color:var(--cyan);font-weight:bold;">A)</small>
+            <input class="q-opt-input" data-idx="${idx}" data-opt="A" type="text" value="${escapeHtml(q.A)}" style="width:100%;padding:6px;font-size:0.85rem;border-radius:4px;border:1px solid var(--panel-border);margin-top:2px;">
+          </div>
+          <div>
+            <small style="color:var(--cyan);font-weight:bold;">B)</small>
+            <input class="q-opt-input" data-idx="${idx}" data-opt="B" type="text" value="${escapeHtml(q.B)}" style="width:100%;padding:6px;font-size:0.85rem;border-radius:4px;border:1px solid var(--panel-border);margin-top:2px;">
+          </div>
+          <div>
+            <small style="color:var(--cyan);font-weight:bold;">C)</small>
+            <input class="q-opt-input" data-idx="${idx}" data-opt="C" type="text" value="${escapeHtml(q.C)}" style="width:100%;padding:6px;font-size:0.85rem;border-radius:4px;border:1px solid var(--panel-border);margin-top:2px;">
+          </div>
+          <div>
+            <small style="color:var(--cyan);font-weight:bold;">D)</small>
+            <input class="q-opt-input" data-idx="${idx}" data-opt="D" type="text" value="${escapeHtml(q.D)}" style="width:100%;padding:6px;font-size:0.85rem;border-radius:4px;border:1px solid var(--panel-border);margin-top:2px;">
+          </div>
+        </div>
+      `;
+
+                questionsContainer.appendChild(card);
+            });
+
+            // Stats bar update
+            document.getElementById('statCount').innerText = `${questionsData.length} Questions Detected`;
+            document.getElementById('statWarnings').innerText = `${totalWarns} Warnings`;
+            document.getElementById('statDiffSummary').innerText = `Easy: ${easyCount} | Med: ${medCount} | Hard: ${hardCount}`;
+
+            updateCounts();
+            attachInputListeners();
+        }
+
+        function updateCounts() {
+            document.getElementById('countAll').innerText = questionsData.length;
+            let warns = questionsData.filter(q => (q.warnings || []).length > 0).length;
+            let easy = questionsData.filter(q => q.difficulty === 'Easy').length;
+            let med = questionsData.filter(q => q.difficulty === 'Medium').length;
+            let hard = questionsData.filter(q => q.difficulty === 'Hard').length;
+            document.getElementById('countWarn').innerText = warns;
+            document.getElementById('countEasy').innerText = easy;
+            document.getElementById('countMed').innerText = med;
+            document.getElementById('countHard').innerText = hard;
+        }
+
+        function attachInputListeners() {
+            document.querySelectorAll('.q-text-input').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.getAttribute('data-idx'));
+                    questionsData[idx].question = e.target.value;
+                });
+            });
+            document.querySelectorAll('.q-opt-input').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.getAttribute('data-idx'));
+                    const optKey = e.target.getAttribute('data-opt');
+                    questionsData[idx][optKey] = e.target.value;
+                });
+            });
+            document.querySelectorAll('.q-correct-select').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.getAttribute('data-idx'));
+                    questionsData[idx].correct = e.target.value;
+                });
+            });
+            document.querySelectorAll('.q-diff-select').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.getAttribute('data-idx'));
+                    questionsData[idx].difficulty = e.target.value;
+                    updateCounts();
+                });
+            });
+            document.querySelectorAll('.btn-delete-q').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.getAttribute('data-idx'));
+                    questionsData.splice(idx, 1);
+                    renderQuestions();
+                });
+            });
+        }
+
+        // Filter tab click
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.getAttribute('data-filter');
+                renderQuestions();
+            });
+        });
+
+        // Add blank question
+        btnAddBlank.addEventListener('click', () => {
+            questionsData.push({
+                id: questionsData.length + 1,
+                question: "Enter new question text here...",
+                A: "Option A",
+                B: "Option B",
+                C: "Option C",
+                D: "Option D",
+                correct: "A",
+                difficulty: "Medium",
+                warnings: []
+            });
+            renderQuestions();
+        });
+
+        // Auto-fix warnings
+        btnAutoFixAll.addEventListener('click', () => {
+            questionsData.forEach(q => {
+                q.warnings = [];
+                ["A", "B", "C", "D"].forEach(k => {
+                    if (!q[k] || q[k].trim() === '') q[k] = `Option ${k}`;
+                });
+                if (!["A", "B", "C", "D"].includes(q.correct)) q.correct = "A";
+            });
+            alert('✅ Auto-fixed all missing option values and answer keys!');
+            renderQuestions();
+        });
+
+        // Import to Question Bank
+        btnImportToBank.addEventListener('click', async () => {
+            const examId = selectExam.value;
+            const subj = inputSubject.value.trim() || 'General';
+            if (!examId) {
+                alert('Please select a target exam from the dropdown.');
+                return;
+            }
+            if (questionsData.length === 0) {
+                alert('No questions available to import.');
+                return;
+            }
+            btnImportToBank.disabled = true;
+            btnImportToBank.innerHTML = '<span>⏳ Importing...</span>';
+
+            try {
+                const resp = await fetch('/api/import_converted_mcqs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exam_id: parseInt(examId), subject: subj, questions: questionsData })
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    alert(`🎉 ${data.message}`);
+                } else {
+                    alert(data.message || 'Import failed.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to import into exam question bank.');
+            } finally {
+                btnImportToBank.disabled = false;
+                btnImportToBank.innerHTML = '<span>⚡ Import to Exam</span>';
+            }
+        });
+
+        // Export to DOCX
+        btnExportDocx.addEventListener('click', async () => {
+            if (questionsData.length === 0) {
+                alert('No questions to export.');
+                return;
+            }
+            btnExportDocx.disabled = true;
+            try {
+                const resp = await fetch('/api/export_mcq_docx', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ questions: questionsData, title: "Converted MCQ Assessment" })
+                });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted_mcqs.docx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } else {
+                    alert('Failed to generate Word document.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error downloading Word file.');
+            } finally {
+                btnExportDocx.disabled = false;
+            }
+        });
+
+        // Export CSV
+        btnExportCsv.addEventListener('click', () => {
+            if (questionsData.length === 0) {
+                alert('No questions to export.');
+                return;
+            }
+            let csv = '\ufeff# , Question , Option A , Option B , Option C , Option D , Correct Answer , Difficulty\n';
+            questionsData.forEach((q, idx) => {
+                const esc = (str) => `"${(str || '').replace(/"/g, '""')}"`;
+                csv += `${idx + 1},${esc(q.question)},${esc(q.A)},${esc(q.B)},${esc(q.C)},${esc(q.D)},${esc(q.correct)},${esc(q.difficulty)}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'converted_mcqs.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+
+        // Print Ready / PDF Modal
+        btnPrintReady.addEventListener('click', () => {
+            if (questionsData.length === 0) {
+                alert('No questions to preview.');
+                return;
+            }
+            let html = `
+      <div style="border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:20px;">
+        <h1 style="margin:0;font-size:1.6rem;color:#0f172a;">Diploma Quiz Portal — MCQ Assessment</h1>
+        <p style="margin:4px 0 0;color:#64748b;font-size:0.9rem;">Total Questions: ${questionsData.length} · Subject Tag: ${escapeHtml(inputSubject.value || 'General')}</p>
+      </div>
+    `;
+
+            questionsData.forEach((q, idx) => {
+                html += `
+        <div style="margin-bottom:18px;page-break-inside:avoid;">
+          <div style="font-weight:bold;font-size:1rem;color:#0f172a;margin-bottom:6px;">
+            ${idx + 1}. ${escapeHtml(q.question)}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.9rem;padding-left:14px;color:#334155;">
+            <div>A) ${escapeHtml(q.A)}</div>
+            <div>B) ${escapeHtml(q.B)}</div>
+            <div>C) ${escapeHtml(q.C)}</div>
+            <div>D) ${escapeHtml(q.D)}</div>
+          </div>
+        </div>
+      `;
+            });
+
+            html += `
+      <div style="margin-top:30px;padding-top:16px;border-top:2px dashed #94a3b8;page-break-before:auto;">
+        <h3 style="margin:0 0 10px;font-size:1.1rem;color:#0f172a;">ANSWER KEY SUMMARY</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-family:monospace;font-size:0.95rem;color:#1e293b;">
+          ${questionsData.map((q, idx) => `<span style="background:#f1f5f9;padding:4px 8px;border-radius:4px;border:1px solid #cbd5e1;">Q${idx + 1}: <strong>${q.correct}</strong></span>`).join('')}
+        </div>
+      </div>
+    `;
+
+            printArea.innerHTML = html;
+            printModal.style.display = 'flex';
+        });
+
+        btnClosePrint.addEventListener('click', () => {
+            printModal.style.display = 'none';
+        });
+
+        btnExecutePrint.addEventListener('click', () => {
+            window.print();
+        });
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    });
+</script>
+{% endblock %}

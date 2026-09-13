@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Teacher Login — Diploma Quiz Portal{% endblock %}
+{% block content %}
+<div class="center-page">
+  <section class="glass auth-card narrow">
+    <div class="card-heading">
+      <div>
+        <div class="eyebrow">STAFF ACCESS</div>
+        <h2>Teacher Portal</h2>
+      </div>
+      <div class="icon-badge">🔐</div>
+    </div>
+
+    <form action="{{ url_for('login') }}" method="POST" autocomplete="off">
+      <input type="hidden" name="role" value="teacher">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <label for="teacher_user">Username</label>
+      <input id="teacher_user" type="text" name="teacher_user" placeholder="Enter teacher username" required>
+
+      <label for="teacher_pass">Password</label>
+      <input id="teacher_pass" type="password" name="teacher_pass" placeholder="Enter password" required>
+
+      <button class="primary full" type="submit">
+        <span>Sign In</span>
+        <span>→</span>
+      </button>
+    </form>
+
+    <a class="back-link" href="{{ url_for('home') }}">
+      <span>← Back to Student Portal</span>
+    </a>
+  </section>
+</div>
+{% endblock %}

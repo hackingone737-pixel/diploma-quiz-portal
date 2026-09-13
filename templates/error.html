@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Server Error — Diploma Quiz Portal{% endblock %}
+{% block content %}
+<div class="center-page">
+  <section class="glass auth-card narrow" style="text-align:center;">
+    <div class="icon-badge"
+      style="margin:0 auto 16px;background:rgba(225,29,72,0.2);border-color:rgba(225,29,72,0.4);color:var(--rose);">⚠️
+    </div>
+    <div class="eyebrow" style="justify-content:center;">SERVER ERROR</div>
+    <h2 style="margin:8px 0 12px;">Something went wrong</h2>
+    <p class="muted" style="margin-bottom:24px;">{{ message }}</p>
+    <a class="primary full" href="{{ url_for('home') }}">
+      <span>Return to Home</span>
+      <span>→</span>
+    </a>
+  </section>
+</div>
+{% endblock %}
