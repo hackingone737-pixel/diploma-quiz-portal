@@ -227,5 +227,25 @@
     if (navLink) navLink.classList.add('answered');
   });
   updateProgress();
+
+  // --- ANTI-CHEATING & ANTI-INSPECT PROTECTION ---
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  ['copy', 'cut', 'paste', 'dragstart', 'selectstart'].forEach(evt => {
+    document.addEventListener(evt, e => e.preventDefault());
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 123 || e.key === 'F12') {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }
+    if (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }
+    if (e.metaKey && e.altKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }
+    if ((e.ctrlKey || e.metaKey) && ['u', 'U', 's', 'S', 'p', 'P', 'c', 'C'].includes(e.key)) {
+      e.preventDefault(); e.stopPropagation(); return false;
+    }
+  });
 </script>
 {% endblock %}
