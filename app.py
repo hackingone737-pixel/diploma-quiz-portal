@@ -291,6 +291,25 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def get_or_create_exam_start_time():
+    """Safely retrieves or initializes the student's exam start datetime."""
+    if "exam_started_at" not in session or not session.get("exam_started_at"):
+        session["exam_started_at"] = now_iso()
+    
+    val = session["exam_started_at"]
+    try:
+        if isinstance(val, str):
+            if val.endswith("Z"):
+                val = val[:-1] + "+00:00"
+            return datetime.fromisoformat(val)
+    except Exception:
+        pass
+
+    now_str = now_iso()
+    session["exam_started_at"] = now_str
+    return datetime.now(timezone.utc)
+
+
 def db_conn():
     if DATABASE_URL and psycopg2 is not None:
         urls_to_try = [DATABASE_URL]
@@ -467,7 +486,7 @@ def login():
         conn.close()
         if not questions:
             flash("This exam has no questions yet.", "error"); return redirect(url_for("home"))
-        ids = [q[0] for q in questions]; random.shuffle(ids)
+        ids = [q["id"] for q in questions]; random.shuffle(ids)
         session.clear()
         session.update(role="student", student_pin=pin, student_name=name, exam_id=exam_id, question_ids=ids)
         csrf_token()
@@ -684,7 +703,7 @@ def toggle_exam(exam_id):
     if not check_csrf(): abort(400, "Invalid form token")
     conn = db_conn(); exam = conn.execute("SELECT active FROM exams WHERE id=?", (exam_id,)).fetchone()
     if not exam: conn.close(); abort(404)
-    new_value = 0 if exam[0] else 1
+    new_value = 0 if exam["active"] else 1
     conn.execute("UPDATE exams SET active=? WHERE id=?", (new_value, exam_id)); conn.commit(); conn.close()
     flash("Exam published." if new_value else "Exam unpublished.", "success")
     return redirect(url_for("teacher_dashboard", exam_id=exam_id))
@@ -1405,7 +1424,7 @@ def delete_question(question_id):
     if not q: conn.close(); abort(404)
     conn.execute("DELETE FROM questions WHERE id=?", (question_id,)); conn.commit(); conn.close()
     flash("Question deleted.", "success")
-    return redirect(url_for("teacher_dashboard", exam_id=q[0]))
+    return redirect(url_for("teacher_dashboard", exam_id=q["exam_id"]))
 
 
 @app.get("/teacher/results.csv")
@@ -1478,7 +1497,7 @@ def student_quiz():
     by_id = {r["id"]: r for r in rows}
     questions = [by_id[i] for i in ids if i in by_id and by_id[i]["exam_id"] == exam["id"]]
 
-    started = datetime.fromisoformat(session["exam_started_at"])
+    started = get_or_create_exam_start_time()
     deadline = started + timedelta(minutes=exam["duration_minutes"])
     remaining = max(0, int((deadline - datetime.now(timezone.utc)).total_seconds()))
 
