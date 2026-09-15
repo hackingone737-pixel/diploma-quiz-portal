@@ -8,4 +8,7 @@ venv/
 *.db-journal
 *.sqlite-wal
 *.sqlite-shm
+*.db
+quiz_database.db
+quiz_database.db*
 .DS_Store
